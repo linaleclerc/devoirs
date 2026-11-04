@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>[hidden]{display:none!important}img{max-width:100%}:root{color-scheme:light}</style>
+<title>Devoir Fait</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;600;700&display=swap">
+<style>
+/* Layout: une colonne de cahier (papier Seyès), en-tête avec bascule Enfant / Parent, puis liste de devoirs. */
+:root{
+  --paper:#f7f9fc;
+  --grid:#e3eaf5;
+  --grid-strong:#cfdbee;
+  --card:#ffffff;
+  --ink:#1b2a4a;
+  --ink-soft:#56648a;
+  --line:#d3ddee;
+  --accent:#2f4bd8;
+  --accent-ink:#ffffff;
+  --hl:#ffe55c;
+  --hl-ink:#3d3300;
+  --ok:#17744c;
+  --ok-bg:#dff3e8;
+  --warn-bg:#fff1bd;
+  --warn-ink:#6b5300;
+  --late:#b72f2f;
+  --late-bg:#fde4e2;
+  --sc-s:80%;
+  --sc-l:86%;
+  --sc-ink-s:65%;
+  --sc-ink-l:20%;
+  --font-display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
+  --font-body:'Figtree','Segoe UI',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f1626;--grid:#17233d;--grid-strong:#1e2f52;--card:#16203a;--ink:#e8eefc;--ink-soft:#9fb0d6;--line:#2a3a60;
+    --accent:#8ea2ff;--accent-ink:#0f1626;--hl:#e6c93a;--hl-ink:#1f1a00;--ok:#5fd19b;--ok-bg:#163a2b;
+    --warn-bg:#3b3310;--warn-ink:#f0dc86;--late:#ff9b9b;--late-bg:#40201f;--sc-s:45%;--sc-l:26%;--sc-ink-s:85%;--sc-ink-l:88%;color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f1626;--grid:#17233d;--grid-strong:#1e2f52;--card:#16203a;--ink:#e8eefc;--ink-soft:#9fb0d6;--line:#2a3a60;
+  --accent:#8ea2ff;--accent-ink:#0f1626;--hl:#e6c93a;--hl-ink:#1f1a00;--ok:#5fd19b;--ok-bg:#163a2b;
+  --warn-bg:#3b3310;--warn-ink:#f0dc86;--late:#ff9b9b;--late-bg:#40201f;--sc-s:45%;--sc-l:26%;--sc-ink-s:85%;--sc-ink-l:88%;color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(to right,var(--grid-strong) 1px,transparent 1px),
+    linear-gradient(to bottom,var(--grid-strong) 1px,transparent 1px),
+    linear-gradient(to bottom,var(--grid) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px,100% 8px;
+  color:var(--ink);
+  font-family:var(--font-body);
+  font-size:16px;
+  line-height:1.5;
+  padding-block:20px 56px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:20px;min-width:0}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px}
+h1{font-family:var(--font-display);font-weight:700;font-size:2.1rem;letter-spacing:-0.02em;line-height:1.1;margin:0;text-wrap:balance}
+h1 mark{background:linear-gradient(transparent 52%,var(--hl) 52%);color:inherit;padding:0 .12em}
+h2{font-family:var(--font-display);font-weight:600;font-size:1.15rem;margin:0;text-wrap:balance}
+.lead{margin:0;color:var(--ink-soft);background:var(--paper);padding:2px 6px;border-radius:6px;width:fit-content;max-width:100%}
+.switch{display:inline-flex;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:3px;gap:3px}
+.switch button{min-height:44px;padding:0 18px;border:0;border-radius:7px;background:transparent;color:var(--ink);font:600 .95rem var(--font-body);cursor:pointer}
+.switch button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+details.panel{gap:0}
+details.panel>summary{cursor:pointer;font-family:var(--font-display);font-weight:600;font-size:1.05rem;min-height:44px;display:flex;align-items:center}
+details.panel[open]>summary{margin-bottom:8px}
+details.panel form{display:flex;flex-direction:column;gap:12px}
+.hint{margin:0;color:var(--ink-soft);font-size:.92rem}
+.err{margin:0;color:var(--late);font-weight:600;font-size:.92rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f.wide{grid-column:1/-1}
+.f>span{font-size:.8rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-soft)}
+input,select{width:100%;min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);font:400 16px var(--font-body)}
+textarea{width:100%;min-height:96px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);font:400 16px/1.4 var(--font-body);resize:vertical}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:600 .95rem var(--font-body);cursor:pointer;text-align:center}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{border-color:var(--late);color:var(--late)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.sec-head{display:flex;align-items:baseline;gap:8px;margin:0}
+.sec-head .count{font-weight:700;color:var(--ink-soft)}
+.list{display:flex;flex-direction:column;gap:12px}
+.task{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.task.is-done{background:var(--paper)}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.subj{background:hsl(var(--h,220) calc(var(--sc-s) * var(--k,1)) var(--sc-l));color:hsl(var(--h,220) calc(var(--sc-ink-s) * var(--k,1)) var(--sc-ink-l));font-weight:700;font-size:.85rem;padding:2px 10px;border-radius:6px}
+.s-maths{--h:225}.s-francais{--h:350}.s-anglais{--h:265}.s-histoire-geo{--h:25}.s-svt{--h:105}.s-physique-chimie{--h:190}.s-techno{--h:50}.s-musique{--h:315}.s-arts-plastiques{--h:155}.s-autre{--k:0}
+.due{font-size:.85rem;color:var(--ink-soft);padding:2px 8px;border-radius:6px}
+.due.soon{background:var(--warn-bg);color:var(--warn-ink);font-weight:600}
+.due.late{background:var(--late-bg);color:var(--late);font-weight:600}
+.pill{margin-left:auto;font-size:.8rem;font-weight:700;padding:2px 10px;border-radius:999px}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.todo{background:var(--warn-bg);color:var(--warn-ink)}
+.txt{margin:0;font-size:1.05rem;font-weight:600;overflow-wrap:anywhere}
+.tags{margin:0;font-size:.8rem;color:var(--ink-soft)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.thumb{width:88px;height:88px;padding:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--paper);cursor:pointer}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.empty{margin:0;padding:16px;border:1px dashed var(--line);border-radius:12px;background:var(--card);color:var(--ink-soft)}
+.foot{margin:0;font-size:.85rem;color:var(--ink-soft);background:var(--paper);padding:2px 6px;border-radius:6px}
+/* Questions : éditeur parent et réponses enfant */
+.q{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--paper);min-width:0}
+.q-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.q-head strong{font-family:var(--font-display)}
+.q-head select{width:auto}
+.choice{display:flex;align-items:center;gap:8px}
+.choice input[type="radio"],.opt input{width:22px;height:22px;min-height:22px;flex:none;padding:0;accent-color:var(--accent)}
+.choice input[type="text"]{flex:1;min-width:0}
+.answers{display:flex;flex-direction:column;gap:14px}
+.ans-q{display:flex;flex-direction:column;gap:8px;border:0;padding:0;margin:0;min-width:0}
+.ans-q legend,.ans-q>label{font-weight:600;padding:0;margin-bottom:2px;overflow-wrap:anywhere}
+.opt{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);cursor:pointer}
+.qlist{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:2px;font-size:.92rem;color:var(--ink-soft)}
+.review summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
+.rq{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
+.rq p{margin:0;overflow-wrap:anywhere}
+.good{color:var(--ok);font-weight:600}
+.bad{color:var(--late);font-weight:600}
+.dictee{display:flex;flex-direction:column;gap:10px}
+del{color:var(--late);text-decoration:line-through}
+ins{color:var(--ok);font-weight:700;text-decoration:underline}
+.answer{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+#lightbox{position:fixed;inset:0;z-index:20;background:rgba(8,12,24,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+#lightbox img{max-width:100%;max-height:78vh;border-radius:8px;background:#fff}
+#toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:calc(100% - 32px);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:8px;font-size:.92rem;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s;z-index:30}
+#toast.show{opacity:1}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+      <h1>Devoir <mark>Fait</mark></h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <div class="switch" role="group" aria-label="Choisir la vue">
+      <button type="button" id="btnChild" aria-pressed="true">Enfant</button>
+      <button type="button" id="btnParent" aria-pressed="false">Parent</button>
+    </div>
+  </header>
+
+  <section id="gate" hidden></section>
+  <section id="addbox" hidden></section>
+  <section id="list" class="list" aria-live="polite"></section>
+  <section id="settings" hidden></section>
+
+  <p class="foot">Pour l'instant, les devoirs restent sur cet appareil. Le code parent cache la vue parent, mais il ne remplace pas un vrai compte.</p>
+</div>
+
+<div id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Photo du devoir">
+  <img id="lbImg" alt="Photo du devoir en grand">
+  <button type="button" class="btn" id="lbClose">Fermer</button>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+(function(){
+  var SUBJECTS=['Maths','Français','Anglais','Histoire-Géo','SVT','Physique-Chimie','Techno','Musique','Arts plastiques','Autre'];
+  var TYPES={feuille:'Sur feuille (photo)',questions:'Avec questions',dictee:'Dictée'};
+  var KEY='devoirfait.v2',OLD_KEY='devoirfait.v1';
+  var role='child',unlocked=false,pendingDelete=null,lock={fails:0,until:0},toastTimer=null;
+  var editingId=null,editDraft=null,addDraft=[],answerDrafts={},dDrafts={},openId=null,editMeta=null;
+  var $=function(s){return document.querySelector(s)};
+
+  function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+  function uid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36)}
+  function subjSlug(s){return String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
+  function rand(){return Math.random().toString(16).slice(2)+Math.random().toString(16).slice(2)}
+  function iso(d){var z=function(n){return String(n).padStart(2,'0')};return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())}
+  function addDays(n){var d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+n);return iso(d)}
+  function dayDiff(due){var a=new Date(due+'T12:00:00'),b=new Date();b.setHours(12,0,0,0);return Math.round((a-b)/864e5)}
+  var dFmt=new Intl.DateTimeFormat('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  var tFmt=new Intl.DateTimeFormat('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+
+  function newQ(kind){
+    return kind==='qcm'?{id:uid(),kind:'qcm',prompt:'',choices:['','',''],correct:0}:{id:uid(),kind:'text',prompt:''};
+  }
+  function toDraft(qs){
+    return (qs||[]).map(function(q){
+      var c={id:q.id,kind:q.kind,prompt:q.prompt};
+      if(q.kind==='qcm'){c.choices=q.choices.slice();c.correct=q.correct}
+      return c;
+    });
+  }
+  function cleanQuestions(draft){
+    var out=[];
+    for(var i=0;i<draft.length;i++){
+      var q=draft[i],p=(q.prompt||'').trim();
+      if(!p)return {error:'La question '+(i+1)+' est vide.'};
+      if(q.kind==='qcm'){
+        var chs=[],map={};
+        q.choices.forEach(function(c,ci){var v=(c||'').trim();if(v){map[ci]=chs.length;chs.push(v)}});
+        if(chs.length<2)return {error:'Le QCM '+(i+1)+' doit avoir au moins 2 réponses.'};
+        if(map[q.correct]===undefined)return {error:'Choisis la bonne réponse de la question '+(i+1)+'.'};
+        out.push({id:q.id,kind:'qcm',prompt:p,choices:chs,correct:map[q.correct]});
+      }else{
+        out.push({id:q.id,kind:'text',prompt:p});
+      }
+    }
+    return {questions:out};
+  }
+
+  function seed(){
+    return {pin:null,salt:null,tasks:[
+      {id:uid(),subject:'Maths',text:'Exercices 4 et 5 page 82',due:addDays(1),type:'feuille',questions:[],done:false,photo:null,answers:null,score:null,doneAt:null,example:true,by:'parent'},
+      {id:uid(),subject:'Français',text:'Lire le chapitre 3 du livre',due:addDays(1),type:'questions',
+        questions:[
+          {id:uid(),kind:'qcm',prompt:'Qui arrive à la fin du chapitre ?',choices:['Le voisin','La maîtresse','Un cousin'],correct:0},
+          {id:uid(),kind:'text',prompt:'Explique avec tes mots ce qui se passe dans ce chapitre.'}
+        ],done:false,photo:null,answers:null,score:null,doneAt:null,example:true,by:'parent'},
+      {id:uid(),subject:'Anglais',text:'Apprendre les verbes irréguliers (liste 2)',due:addDays(3),type:'questions',
+        questions:[
+          {id:uid(),kind:'qcm',prompt:'Quel est le passé de « to go » ?',choices:['went','goed','gone'],correct:0},
+          {id:uid(),kind:'qcm',prompt:'Quel est le passé de « to see » ?',choices:['seed','saw','sawed'],correct:1}
+        ],done:false,photo:null,answers:null,score:null,doneAt:null,example:true,by:'parent'}
+    ]};
+  }
+  function load(){
+    try{
+      var r=localStorage.getItem(KEY);
+      if(r){var s=JSON.parse(r);if(s&&Array.isArray(s.tasks))return s}
+      var old=localStorage.getItem(OLD_KEY);
+      if(old){
+        var o=JSON.parse(old);
+        if(o&&Array.isArray(o.tasks)){
+          o.tasks.forEach(function(t){
+            t.questions=t.questions||[];t.answers=t.answers||null;t.score=null;
+            if(t.type!=='feuille'){
+              var p=t.type==='lecture'?'Explique avec tes mots ce que tu as lu.':'Explique avec tes mots ce que tu as appris.';
+              t.type='questions';t.questions=[{id:uid(),kind:'text',prompt:p}];
+            }
+          });
+          return o;
+        }
+      }
+    }catch(e){}
+    return seed();
+  }
+  var state=load();
+  function save(){
+    try{localStorage.setItem(KEY,JSON.stringify(state));return true}
+    catch(e){toast('Mémoire pleine ou bloquée. Les changements ne seront pas gardés.');return false}
+  }
+  function toast(m){
+    var t=$('#toast');t.textContent=m;t.classList.add('show');
+    clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.classList.remove('show')},2800);
+  }
+
+  function sha(str){
+    var b=new TextEncoder().encode(str);
+    return crypto.subtle.digest('SHA-256',b).then(function(h){
+      return Array.from(new Uint8Array(h)).map(function(x){return x.toString(16).padStart(2,'0')}).join('');
+    });
+  }
+  function hashPin(p){
+    try{return sha((state.salt||'')+p)}catch(e){return Promise.resolve('x:'+p)}
+  }
+
+  function dueInfo(t){
+    var d=dayDiff(t.due),fmt=dFmt.format(new Date(t.due+'T12:00:00'));
+    if(t.done)return {text:'Pour le '+fmt,cls:''};
+    if(d<0)return {text:'En retard · '+fmt,cls:'late'};
+    if(d===0)return {text:'Pour aujourd’hui',cls:'soon'};
+    if(d===1)return {text:'Pour demain',cls:'soon'};
+    return {text:'Pour '+fmt,cls:''};
+  }
+  function qcmCount(t){return (t.questions||[]).filter(function(q){return q.kind==='qcm'}).length}
+
+  /* ---------- Éditeur de questions (parent) ---------- */
+  function editorHTML(draft,pre){
+    var h='';
+    draft.forEach(function(q,i){
+      h+='<div class="q" data-qi="'+i+'"><div class="q-head"><strong>Question '+(i+1)+'</strong><div class="row">'+
+        '<select data-qk="kind" aria-label="Type de la question '+(i+1)+'"><option value="text"'+(q.kind==='text'?' selected':'')+'>Réponse écrite</option><option value="qcm"'+(q.kind==='qcm'?' selected':'')+'>QCM</option></select>'+
+        '<button type="button" class="btn" data-ed="remove">Retirer</button></div></div>'+
+        '<label class="f"><span>Question</span><input type="text" data-qk="prompt" maxlength="200" value="'+esc(q.prompt)+'" placeholder="Écris ta question"></label>';
+      if(q.kind==='qcm'){
+        h+='<p class="hint">Écris les réponses et coche la bonne.</p>';
+        q.choices.forEach(function(c,ci){
+          h+='<div class="choice"><input type="radio" name="'+pre+'-ok-'+i+'" data-qk="correct" value="'+ci+'"'+(q.correct===ci?' checked':'')+' aria-label="Bonne réponse : réponse '+(ci+1)+'">'+
+            '<input type="text" data-qk="choice" data-ci="'+ci+'" maxlength="100" value="'+esc(c)+'" placeholder="Réponse '+(ci+1)+'" aria-label="Réponse '+(ci+1)+'">'+
+            (q.choices.length>2?'<button type="button" class="btn" data-ed="remove-choice" data-ci="'+ci+'" aria-label="Retirer la réponse '+(ci+1)+'">×</button>':'')+'</div>';
+        });
+        if(q.choices.length<4)h+='<div class="row"><button type="button" class="btn" data-ed="add-choice">Ajouter une réponse</button></div>';
+      }
+      h+='</div>';
+    });
+    h+='<div class="row"><button type="button" class="btn" data-ed="add-text">+ Question écrite</button><button type="button" class="btn" data-ed="add-qcm">+ QCM</button></div>';
+    return h;
+  }
+  function mountEditor(host,draft,pre,focusLast){
+    host._draft=draft;host._pre=pre;
+    host.innerHTML=editorHTML(draft,pre);
+    if(focusLast){var ins=host.querySelectorAll('[data-qk="prompt"]');if(ins.length)ins[ins.length-1].focus()}
+    if(host._bound)return;
+    host._bound=true;
+    host.addEventListener('input',function(e){
+      var el=e.target,k=el.getAttribute('data-qk');if(!k)return;
+      var qb=el.closest('[data-qi]');if(!qb)return;
+      var q=host._draft[+qb.getAttribute('data-qi')];if(!q)return;
+      if(k==='prompt')q.prompt=el.value;
+      else if(k==='choice')q.choices[+el.getAttribute('data-ci')]=el.value;
+    });
+    host.addEventListener('change',function(e){
+      var el=e.target,k=el.getAttribute('data-qk');if(!k)return;
+      var qb=el.closest('[data-qi]');if(!qb)return;
+      var i=+qb.getAttribute('data-qi'),q=host._draft[i];if(!q)return;
+      if(k==='correct'){q.correct=+el.value}
+      else if(k==='kind'){
+        var nq=newQ(el.value);nq.id=q.id;nq.prompt=q.prompt;host._draft[i]=nq;
+        mountEditor(host,host._draft,host._pre);
+      }
+    });
+    host.addEventListener('click',function(e){
+      var b=e.target.closest('[data-ed]');if(!b)return;
+      var act=b.getAttribute('data-ed'),qb=b.closest('[data-qi]'),i=qb?+qb.getAttribute('data-qi'):-1,d=host._draft;
+      if(act==='add-text'){d.push(newQ('text'));mountEditor(host,d,host._pre,true)}
+      else if(act==='add-qcm'){d.push(newQ('qcm'));mountEditor(host,d,host._pre,true)}
+      else if(act==='remove'&&i>=0){d.splice(i,1);mountEditor(host,d,host._pre)}
+      else if(act==='add-choice'&&i>=0){d[i].choices.push('');mountEditor(host,d,host._pre)}
+      else if(act==='remove-choice'&&i>=0){
+        var ci=+b.getAttribute('data-ci'),q=d[i];
+        q.choices.splice(ci,1);
+        if(q.correct===ci)q.correct=0;else if(q.correct>ci)q.correct--;
+        mountEditor(host,d,host._pre);
+      }
+    });
+  }
+
+  /* ---------- Cartes de devoirs ---------- */
+  function answerFormHTML(t){
+    var d=answerDrafts[t.id]||(answerDrafts[t.id]={});
+    var h='<div class="answers">';
+    t.questions.forEach(function(q,i){
+      if(q.kind==='qcm'){
+        h+='<fieldset class="ans-q"><legend>'+(i+1)+'. '+esc(q.prompt)+'</legend>';
+        q.choices.forEach(function(c,ci){
+          h+='<label class="opt"><input type="radio" name="a-'+t.id+'-'+i+'" data-ans="'+i+'" data-task="'+t.id+'" value="'+ci+'"'+(d[q.id]===ci?' checked':'')+'><span>'+esc(c)+'</span></label>';
+        });
+        h+='</fieldset>';
+      }else{
+        h+='<div class="ans-q"><label for="a-'+t.id+'-'+i+'">'+(i+1)+'. '+esc(q.prompt)+'</label>'+
+          '<textarea id="a-'+t.id+'-'+i+'" data-ans="'+i+'" data-task="'+t.id+'" placeholder="Écris ta réponse avec tes mots">'+esc(d[q.id]||'')+'</textarea></div>';
+      }
+    });
+    return h+'</div>';
+  }
+  function reviewHTML(t){
+    if(!t.answers||!t.answers.length)return '';
+    var n=qcmCount(t);
+    var h='<details class="review"><summary>Voir les réponses'+(n?' · QCM '+t.score+'/'+n:'')+'</summary>';
+    t.questions.forEach(function(q,i){
+      var a=t.answers.find(function(x){return x.q===q.id});
+      h+='<div class="rq"><p><strong>'+(i+1)+'.</strong> '+esc(q.prompt)+'</p>';
+      if(!a){h+='<p class="hint">Pas de réponse.</p>'}
+      else if(q.kind==='qcm'){
+        var ok=a.v===q.correct;
+        h+='<p>Réponse : '+esc(q.choices[a.v]||'?')+'</p>'+
+           (ok?'<p class="good">Bonne réponse</p>':'<p class="bad">Mauvaise réponse. Bonne réponse : '+esc(q.choices[q.correct])+'</p>');
+      }else{
+        h+='<p class="answer">'+esc(a.v)+'</p>';
+      }
+      h+='</div>';
+    });
+    return h+'</details>';
+  }
+  function doneLabel(t){
+    var n=qcmCount(t),s='Fait · '+tFmt.format(new Date(t.doneAt||Date.now()));
+    if(n&&t.answers)s+=' · QCM '+t.score+'/'+n;
+    if(t.type==='dictee'&&typeof t.errors==='number')s+=' · '+t.errors+' faute'+(t.errors>1?'s':'');
+    return s;
+  }
+
+  /* ---------- Dictée ---------- */
+  var SPEECH=typeof window.speechSynthesis!=='undefined'&&typeof window.SpeechSynthesisUtterance!=='undefined';
+  function splitSentences(text){
+    var m=String(text||'').replace(/\s+/g,' ').trim().match(/[^.!?…]+(?:[.!?…]+["»”)]*)?\s*/g);
+    return m?m.map(function(x){return x.trim()}).filter(Boolean):[];
+  }
+  function tokenize(s){
+    return (String(s||'').replace(/[’‘]/g,"'").replace(/\s+/g,' ').trim().match(/[\p{L}\p{N}]+(?:['-][\p{L}\p{N}]+)*|[^\s\p{L}\p{N}]/gu))||[];
+  }
+  function diffTokens(a,b){
+    var n=a.length,m=b.length,dp=[],i,j;
+    for(i=0;i<=n;i++)dp.push(new Array(m+1).fill(0));
+    for(i=n-1;i>=0;i--)for(j=m-1;j>=0;j--)dp[i][j]=a[i]===b[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+    var ops=[],x=0,y=0;
+    while(x<n&&y<m){
+      if(a[x]===b[y]){ops.push({t:'eq',w:a[x]});x++;y++}
+      else if(dp[x+1][y]>=dp[x][y+1]){ops.push({t:'del',w:a[x]});x++}
+      else{ops.push({t:'ins',w:b[y]});y++}
+    }
+    while(x<n)ops.push({t:'del',w:a[x++]});
+    while(y<m)ops.push({t:'ins',w:b[y++]});
+    var blocks=[],cur=null,errors=0;
+    ops.forEach(function(o){
+      if(o.t==='eq'){if(cur){blocks.push(cur);cur=null}blocks.push({eq:o.w})}
+      else{if(!cur)cur={wrong:[],right:[]};if(o.t==='ins')cur.wrong.push(o.w);else cur.right.push(o.w)}
+    });
+    if(cur)blocks.push(cur);
+    blocks.forEach(function(bl){if(bl.eq===undefined)errors+=Math.max(bl.wrong.length,bl.right.length)});
+    return {blocks:blocks,errors:errors,total:n};
+  }
+  function speechText(s,punct){
+    if(!punct)return s;
+    return s.replace(/\.\.\.|…/g,' points de suspension ').replace(/,/g,' virgule ').replace(/;/g,' point-virgule ')
+      .replace(/:/g,' deux-points ').replace(/\?/g,' point d’interrogation ').replace(/!/g,' point d’exclamation ')
+      .replace(/\./g,' point ').replace(/«/g,' ouvrez les guillemets ').replace(/»/g,' fermez les guillemets ');
+  }
+  function speak(s,punct){
+    if(!SPEECH)return false;
+    try{
+      window.speechSynthesis.cancel();
+      var u=new window.SpeechSynthesisUtterance(speechText(s,punct));
+      u.lang='fr-FR';u.rate=0.8;
+      window.speechSynthesis.speak(u);
+      return true;
+    }catch(e){return false}
+  }
+  function dicteeFormHTML(t){
+    var ss=splitSentences(t.dicteeText);
+    if(!ss.length)return '<p class="hint">Ton parent doit encore ajouter le texte.</p>';
+    var d=dDrafts[t.id]||(dDrafts[t.id]={i:0,typed:[],punct:true,peeks:0});
+    var i=Math.min(d.i,ss.length-1),last=i===ss.length-1;
+    return '<div class="dictee"><p class="hint">Phrase '+(i+1)+' sur '+ss.length+'</p>'+
+      '<div class="row"><button type="button" class="btn" data-act="d-play" data-id="'+t.id+'">Écouter</button>'+
+      '<label class="opt"><input type="checkbox" data-act="d-punct" data-id="'+t.id+'"'+(d.punct?' checked':'')+'><span>Dire la ponctuation</span></label></div>'+
+      (SPEECH?'':'<p class="err">Le son ne marche pas sur cet appareil. Essaie un autre navigateur.</p>')+
+      '<label class="f"><span>Écris ce que tu entends</span><textarea id="dt-'+t.id+'" data-dtype="'+t.id+'" aria-label="Phrase '+(i+1)+'">'+esc(d.typed[i]||'')+'</textarea></label>'+
+      '<div class="row">'+(i>0?'<button type="button" class="btn" data-act="d-prev" data-id="'+t.id+'">Précédente</button>':'')+
+      (last?'<button type="button" class="btn primary" data-act="d-submit" data-id="'+t.id+'">Envoyer la dictée</button>':'<button type="button" class="btn primary" data-act="d-next" data-id="'+t.id+'">Phrase suivante</button>')+
+      '</div></div>';
+  }
+  function dicteeReviewHTML(t,isParent){
+    if(typeof t.typed!=='string')return '';
+    var r=diffTokens(tokenize(t.dicteeText),tokenize(t.typed)),items=[];
+    r.blocks.forEach(function(b){
+      if(b.eq!==undefined)items.push({w:b.eq,c:''});
+      else{
+        b.wrong.forEach(function(w){items.push({w:w,c:'del'})});
+        b.right.forEach(function(w){items.push({w:w,c:'ins'})});
+      }
+    });
+    var html='';
+    items.forEach(function(it,i){
+      var prev=i?items[i-1].w:'';
+      var sp=i>0&&!/^[.,;:!?…)»]$/.test(it.w)&&!/^[(«]$/.test(prev);
+      var w=esc(it.w);
+      html+=(sp?' ':'')+(it.c==='del'?'<del>'+w+'</del>':it.c==='ins'?'<ins>'+w+'</ins>':w);
+    });
+    return '<details class="review" open><summary>'+(r.errors?r.errors+' faute'+(r.errors>1?'s':''):'Aucune faute')+' sur '+r.total+' mots et signes</summary>'+
+      '<p class="answer">'+html+'</p>'+
+      '<p class="hint">Barré : ce qui a été écrit. Souligné : le bon mot.</p>'+
+      '</details>';
+  }
+  function dicteeAction(act,t){
+    if(t.type!=='dictee'||t.done)return;
+    var ss=splitSentences(t.dicteeText);if(!ss.length)return;
+    var d=dDrafts[t.id]||(dDrafts[t.id]={i:0,typed:[],punct:true,peeks:0});
+    d.i=Math.min(d.i,ss.length-1);
+    if(act==='d-play'){
+      if(!speak(ss[d.i],d.punct))toast('Pas de son sur cet appareil.');
+    }else if(act==='d-prev'&&d.i>0){
+      d.i--;renderList();speak(ss[d.i],d.punct);
+    }else if(act==='d-next'&&d.i<ss.length-1){
+      if(!(d.typed[d.i]||'').trim()){toast('Écris la phrase avant de continuer.');return}
+      d.i++;renderList();speak(ss[d.i],d.punct);
+    }else if(act==='d-submit'){
+      for(var i=0;i<ss.length;i++){
+        if(!(d.typed[i]||'').trim()){toast('Écris la phrase '+(i+1)+'.');d.i=i;renderList();return}
+      }
+      var typed=ss.map(function(_,k){return d.typed[k].trim()}).join(' ');
+      var r=diffTokens(tokenize(t.dicteeText),tokenize(typed));
+      t.typed=typed;t.errors=r.errors;t.total=r.total;t.peeks=d.peeks||0;
+      t.done=true;t.doneAt=Date.now();
+      delete dDrafts[t.id];
+      try{if(SPEECH)window.speechSynthesis.cancel()}catch(e){}
+      openId=null;save();renderList();toast('Dictée envoyée');window.scrollTo(0,0);
+    }
+  }
+
+  /* ---------- Modification d'un devoir (parent) : même formulaire que la création ---------- */
+  function editCardHTML(t){
+    var m=editMeta||{},type=m.type||t.type;
+    var list=SUBJECTS.slice();
+    if(m.subject&&list.indexOf(m.subject)<0)list.push(m.subject);
+    var subj=list.map(function(s){return '<option'+(s===m.subject?' selected':'')+'>'+esc(s)+'</option>'}).join('');
+    var types=Object.keys(TYPES).map(function(k){return '<option value="'+k+'"'+(k===type?' selected':'')+'>'+esc(TYPES[k])+'</option>'}).join('');
+    var h='<article class="task"><div class="top"><span class="subj s-'+subjSlug(t.subject)+'">'+esc(t.subject)+'</span><span class="due">Modification</span></div>'+
+      '<div class="grid">'+
+      '<label class="f"><span>Matière</span><select data-em="subject">'+subj+'</select></label>'+
+      '<label class="f"><span>Pour le</span><input type="date" data-em="due" value="'+esc(m.due||'')+'"></label>'+
+      '<label class="f wide"><span>Quoi faire</span><input type="text" data-em="text" maxlength="140" value="'+esc(m.text||'')+'"></label>'+
+      '<label class="f wide"><span>Type</span><select data-em="type">'+types+'</select></label></div>';
+    if(type==='dictee')h+='<label class="f"><span>Texte de la dictée</span><textarea data-em="dict" placeholder="Colle ici le texte que l’enfant doit écrire">'+esc(m.dict||'')+'</textarea></label>';
+    if(type==='questions')h+='<div data-edhost="'+t.id+'" style="display:flex;flex-direction:column;gap:12px"></div>';
+    if(t.done)h+='<p class="hint">Ce devoir est déjà fait. Si tu changes le type, les questions ou le texte de la dictée, il repasse à faire et les réponses sont effacées.</p>';
+    h+='<div class="row"><button type="button" class="btn primary" data-act="save-edit" data-id="'+t.id+'">Enregistrer</button>'+
+       '<button type="button" class="btn" data-act="cancel-edit" data-id="'+t.id+'">Annuler</button></div></article>';
+    return h;
+  }
+  function saveEdit(t){
+    var m=editMeta||{},type=m.type||t.type,text=(m.text||'').trim();
+    var qs=t.questions||[],dict=t.dicteeText||'';
+    if(!text){toast('Écris ce qu’il faut faire.');return}
+    if(!m.due){toast('Choisis une date.');return}
+    if(type==='questions'){
+      var kept=(editDraft||[]).filter(function(q){
+        return (q.prompt||'').trim()||(q.choices||[]).some(function(c){return (c||'').trim()});
+      });
+      var c=cleanQuestions(kept);
+      if(c.error){toast(c.error);return}
+      if(!c.questions.length){toast('Ajoute au moins une question.');return}
+      qs=c.questions;
+    }else if(type==='dictee'){
+      dict=(m.dict||'').trim();
+      if(!splitSentences(dict).length){toast('Colle le texte de la dictée.');return}
+    }
+    var changed=type!==t.type||
+      (type==='questions'&&JSON.stringify(qs)!==JSON.stringify(t.questions||[]))||
+      (type==='dictee'&&dict!==(t.dicteeText||''));
+    var reset=false;
+    if(type!==t.type){t.photo=null}
+    t.type=type;t.subject=m.subject;t.due=m.due;t.text=text;
+    t.questions=type==='questions'?qs:[];
+    t.dicteeText=type==='dictee'?dict:'';
+    if(changed){
+      if(t.done)reset=true;
+      t.done=false;t.doneAt=null;t.answers=null;t.score=null;t.typed=null;t.errors=null;t.total=null;t.peeks=0;
+    }
+    delete answerDrafts[t.id];delete dDrafts[t.id];
+    editingId=null;editDraft=null;editMeta=null;
+    save();renderList();toast(reset?'Devoir modifié. Il est à refaire.':'Devoir modifié');
+  }
+
+  function taskHTML(t,isParent,detail){
+    var due=dueInfo(t),qs=t.questions||[];
+    var tags=[TYPES[t.type]||''];
+    if(t.type==='questions')tags.push(qs.length+' question'+(qs.length>1?'s':''));
+    if(t.type==='dictee')tags.push(splitSentences(t.dicteeText).length+' phrase'+(splitSentences(t.dicteeText).length>1?'s':''));
+    if(t.example)tags.push('Exemple');
+    if(isParent&&t.by==='child')tags.push('Ajouté par l’enfant');
+    var photo=t.photo?'<button type="button" class="thumb" data-act="view" data-id="'+t.id+'" aria-label="Agrandir la photo"><img src="'+t.photo+'" alt="Photo du devoir de '+esc(t.subject)+'"></button>':'';
+    var status=t.done?'<span class="pill ok">'+esc(doneLabel(t))+'</span>':'<span class="pill todo">À faire</span>';
+    var actions='',extra='';
+
+    if(t.type==='dictee'){
+      if(!t.done){
+        if(isParent)extra+='<details><summary>Voir le texte de la dictée</summary><p class="answer">'+esc(t.dicteeText||'')+'</p></details>';
+        else if(detail)extra+=dicteeFormHTML(t);
+        else if(!splitSentences(t.dicteeText).length)extra+='<p class="hint">Ton parent doit encore ajouter le texte.</p>';
+        else actions+='<button type="button" class="btn primary" data-act="open" data-id="'+t.id+'">Faire la dictée</button>';
+      }else{
+        extra+=dicteeReviewHTML(t,isParent);
+      }
+    }
+
+    if(t.type==='feuille'&&!isParent&&!t.done){
+      actions+='<label class="btn" for="f-'+t.id+'">'+(t.photo?'Changer la photo':'Ajouter la photo')+'</label>'+
+               '<input id="f-'+t.id+'" type="file" accept="image/*" data-act="photo" data-id="'+t.id+'" hidden>'+
+               '<button type="button" class="btn primary" data-act="finish" data-id="'+t.id+'"'+(t.photo?'':' disabled')+'>Terminer</button>';
+      if(!t.photo)extra+='<p class="hint">Ajoute la photo de ta feuille pour pouvoir terminer.</p>';
+    }
+    if(t.type==='questions'&&!isParent&&!t.done){
+      if(!qs.length)extra+='<p class="hint">Ton parent doit encore ajouter les questions.</p>';
+      else{
+        if(detail){
+          extra+=answerFormHTML(t);
+          actions+='<button type="button" class="btn primary" data-act="submit" data-id="'+t.id+'">Envoyer mes réponses</button>';
+        }else{
+          var allQcm=qs.every(function(q){return q.kind==='qcm'});
+          actions+='<button type="button" class="btn primary" data-act="open" data-id="'+t.id+'">'+(allQcm?'Faire le QCM':'Répondre aux questions')+'</button>';
+        }
+      }
+    }
+    if(isParent){
+      if(t.type==='questions'&&!t.done){
+        if(editingId===t.id){
+          extra+='<div data-edhost="'+t.id+'" style="display:flex;flex-direction:column;gap:12px"></div>';
+          actions+='<button type="button" class="btn primary" data-act="save-q" data-id="'+t.id+'">Enregistrer les questions</button>'+
+                   '<button type="button" class="btn" data-act="cancel-q" data-id="'+t.id+'">Annuler</button>';
+        }else{
+          if(qs.length){
+            extra+='<ol class="qlist">'+qs.map(function(q){return '<li>'+esc(q.prompt)+(q.kind==='qcm'?' (QCM)':'')+'</li>'}).join('')+'</ol>';
+          }else{
+            extra+='<p class="hint">Aucune question pour l’instant. Ajoute-en pour que l’enfant puisse répondre.</p>';
+          }
+          if(!qs.length)actions+='<button type="button" class="btn" data-act="edit" data-id="'+t.id+'">Ajouter des questions</button>';
+        }
+      }
+      if(t.type==='questions'&&t.done)extra+=reviewHTML(t);
+      if(t.done)actions+='<button type="button" class="btn" data-act="reopen" data-id="'+t.id+'">Remettre à faire</button>';
+      if(editingId!==t.id){
+        if(pendingDelete===t.id){
+          actions+='<button type="button" class="btn danger" data-act="delete-confirm" data-id="'+t.id+'">Confirmer la suppression</button>'+
+                   '<button type="button" class="btn" data-act="delete-cancel" data-id="'+t.id+'">Annuler</button>';
+        }else{
+          actions+='<button type="button" class="btn" data-act="edit" data-id="'+t.id+'">Modifier</button>'+
+                   '<button type="button" class="btn" data-act="delete" data-id="'+t.id+'">Supprimer</button>';
+        }
+      }
+    }
+    return '<article class="task'+(t.done?' is-done':'')+'">'+
+      '<div class="top"><span class="subj s-'+subjSlug(t.subject)+'">'+esc(t.subject)+'</span><span class="due '+due.cls+'">'+esc(due.text)+'</span>'+status+'</div>'+
+      '<p class="txt">'+esc(t.text)+'</p>'+
+      '<p class="tags">'+tags.map(esc).join(' · ')+'</p>'+
+      photo+extra+
+      (actions?'<div class="row">'+actions+'</div>':'')+
+    '</article>';
+  }
+
+  function renderList(){
+    var host=$('#list');
+    if(role==='parent'&&!unlocked){host.innerHTML='';return}
+    var isParent=role==='parent';
+    if(!isParent){
+      var ab=$('#addbox'),ot=openId?find(openId):null;
+      if(ot&&!ot.done&&(ot.type==='questions'||ot.type==='dictee')){
+        ab.hidden=true;
+        host.innerHTML='<div class="row"><button type="button" class="btn" data-act="back" data-id="'+ot.id+'">← Retour à la liste</button></div>'+taskHTML(ot,false,true);
+        return;
+      }
+      openId=null;ab.hidden=false;
+    }
+    var todo=state.tasks.filter(function(t){return !t.done}).sort(function(a,b){return a.due.localeCompare(b.due)});
+    var done=state.tasks.filter(function(t){return t.done}).sort(function(a,b){return (b.doneAt||0)-(a.doneAt||0)});
+    var html='<h2 class="sec-head">À faire <span class="count">'+todo.length+'</span></h2>';
+    html+=todo.length?todo.map(function(t){return isParent&&editingId===t.id?editCardHTML(t):taskHTML(t,isParent)}).join(''):'<p class="empty">Rien à faire pour le moment. Ajoute un devoir ci-dessus.</p>';
+    html+='<h2 class="sec-head">Faits <span class="count">'+done.length+'</span></h2>';
+    html+=done.length?done.map(function(t){return isParent&&editingId===t.id?editCardHTML(t):taskHTML(t,isParent)}).join(''):'<p class="empty">Aucun devoir fait pour l’instant.</p>';
+    host.innerHTML=html;
+    if(isParent&&editingId&&editDraft){
+      var eh=host.querySelector('[data-edhost="'+editingId+'"]');
+      if(eh)mountEditor(eh,editDraft,'ed');
+    }
+  }
+
+  function renderForm(){
+    var box=$('#addbox');
+    var show=role==='child'||(role==='parent'&&unlocked);
+    box.hidden=!show;
+    if(!show){box.innerHTML='';return}
+    addDraft=[newQ('text')];
+    var subj=SUBJECTS.map(function(s){return '<option>'+esc(s)+'</option>'}).join('');
+    var types=Object.keys(TYPES).filter(function(k){return role==='parent'||k!=='dictee'}).map(function(k){return '<option value="'+k+'">'+esc(TYPES[k])+'</option>'}).join('');
+    box.innerHTML='<details class="panel"><summary>Ajouter un devoir</summary>'+
+      '<form id="addForm" autocomplete="off"><div class="grid">'+
+        '<label class="f"><span>Matière</span><select id="fSubject">'+subj+'</select></label>'+
+        '<label class="f"><span>Pour le</span><input type="date" id="fDue" value="'+addDays(1)+'"></label>'+
+        '<label class="f wide"><span>Quoi faire</span><input id="fText" type="text" maxlength="140" placeholder="Ex. Exercices 4 et 5 page 82"></label>'+
+        '<label class="f wide"><span>Type</span><select id="fType">'+types+'</select></label>'+
+      '</div>'+
+      (role==='parent'?'<div id="addEd" hidden style="display:flex;flex-direction:column;gap:12px"></div><label class="f" id="addDictWrap" hidden><span>Texte de la dictée</span><textarea id="fDict" placeholder="Colle ici le texte que l’enfant doit écrire"></textarea></label>':'<p class="hint" id="addHint" hidden>Ton parent ajoutera les questions.</p>')+
+      '<button class="btn primary" type="submit">Ajouter</button></form></details>';
+  }
+
+  function renderGate(){
+    var g=$('#gate');
+    var need=role==='parent'&&!unlocked;
+    g.hidden=!need;
+    if(!need){g.innerHTML='';return}
+    var creating=!state.pin;
+    g.innerHTML='<form id="gateForm" class="panel" autocomplete="off">'+
+      '<h2>'+(creating?'Crée un code parent':'Code parent')+'</h2>'+
+      '<p class="hint">'+(creating?'4 chiffres. L’enfant ne doit pas le connaître.':'Entre le code à 4 chiffres.')+'</p>'+
+      '<label class="f"><span>Code</span><input id="gPin" type="password" inputmode="numeric" maxlength="4" autocomplete="off"></label>'+
+      (creating?'<label class="f"><span>Répète le code</span><input id="gPin2" type="password" inputmode="numeric" maxlength="4" autocomplete="off"></label>':'')+
+      '<p class="err" id="gErr" role="alert" hidden></p>'+
+      '<button class="btn primary" type="submit">'+(creating?'Créer le code':'Entrer')+'</button></form>';
+  }
+
+  function renderSettings(){
+    var s=$('#settings');
+    var show=role==='parent'&&unlocked;
+    s.hidden=!show;
+    if(!show){s.innerHTML='';return}
+    s.innerHTML='<details class="panel"><summary>Changer le code</summary>'+
+      '<form id="pinForm" autocomplete="off">'+
+      '<label class="f"><span>Code actuel</span><input id="pOld" type="password" inputmode="numeric" maxlength="4"></label>'+
+      '<label class="f"><span>Nouveau code</span><input id="pNew" type="password" inputmode="numeric" maxlength="4"></label>'+
+      '<p class="err" id="pErr" role="alert" hidden></p>'+
+      '<button class="btn primary" type="submit">Changer le code</button></form></details>'+
+      '<div class="row" style="margin-top:12px"><button type="button" class="btn" id="btnLock">Verrouiller la vue parent</button></div>';
+  }
+
+  function renderChrome(){
+    $('#btnChild').setAttribute('aria-pressed',role==='child');
+    $('#btnParent').setAttribute('aria-pressed',role==='parent');
+    var lead=$('#lead');
+    if(role==='child')lead.textContent='Ajoute la photo, réponds aux questions ou fais ta dictée.';
+    else if(!unlocked)lead.textContent='Vue parent protégée par un code.';
+    else lead.textContent='Tu vois ce qui est fait, avec les photos et les réponses.';
+  }
+
+  function renderAll(){renderChrome();renderGate();renderForm();renderList();renderSettings()}
+
+  function setRole(r){
+    if(r===role)return;
+    role=r;
+    if(r==='child'){unlocked=false;pendingDelete=null;editingId=null;editDraft=null;openId=null;editMeta=null}
+    renderAll();
+  }
+  $('#btnChild').addEventListener('click',function(){setRole('child')});
+  $('#btnParent').addEventListener('click',function(){setRole('parent')});
+
+  function find(id){return state.tasks.find(function(t){return t.id===id})}
+
+  function shrink(file){
+    return new Promise(function(res,rej){
+      var url=URL.createObjectURL(file),img=new Image();
+      img.onload=function(){
+        var k=Math.min(1,1000/Math.max(img.width,img.height));
+        var c=document.createElement('canvas');
+        c.width=Math.max(1,Math.round(img.width*k));c.height=Math.max(1,Math.round(img.height*k));
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        URL.revokeObjectURL(url);res(c.toDataURL('image/jpeg',0.72));
+      };
+      img.onerror=function(){URL.revokeObjectURL(url);rej(new Error('image'))};
+      img.src=url;
+    });
+  }
+
+  function submitAnswers(t){
+    var d=answerDrafts[t.id]||{},answers=[],score=0;
+    for(var i=0;i<t.questions.length;i++){
+      var q=t.questions[i],v=d[q.id];
+      if(q.kind==='qcm'){
+        if(typeof v!=='number'){toast('Réponds à la question '+(i+1)+'.');return}
+        if(v===q.correct)score++;
+        answers.push({q:q.id,v:v});
+      }else{
+        v=(v||'').trim();
+        if(v.length<15){toast('Question '+(i+1)+' : écris au moins une phrase.');return}
+        answers.push({q:q.id,v:v});
+      }
+    }
+    t.answers=answers;t.score=score;t.done=true;t.doneAt=Date.now();
+    delete answerDrafts[t.id];
+    openId=null;save();renderList();toast('Réponses envoyées');window.scrollTo(0,0);
+  }
+
+  $('#list').addEventListener('click',function(e){
+    var b=e.target.closest('[data-act]');if(!b)return;
+    var act=b.getAttribute('data-act'),id=b.getAttribute('data-id'),t=id?find(id):null;
+    if(act==='view'&&t&&t.photo){$('#lbImg').src=t.photo;$('#lightbox').hidden=false;$('#lbClose').focus();return}
+    if(!t)return;
+    var parentOk=role==='parent'&&unlocked;
+    if(act==='finish'){
+      if(t.type!=='feuille'||t.done)return;
+      if(!t.photo){toast('Ajoute d’abord la photo.');return}
+      t.done=true;t.doneAt=Date.now();save();renderList();toast('Bravo, devoir terminé');
+    }else if(act==='submit'){
+      if(t.type!=='questions'||t.done||!t.questions.length)return;
+      submitAnswers(t);
+    }else if(act==='open'&&role==='child'){
+      if(t.done)return;
+      openId=t.id;renderList();window.scrollTo(0,0);
+      if(t.type==='dictee')dicteeAction('d-play',t);
+    }else if(act==='back'){
+      openId=null;renderList();window.scrollTo(0,0);
+    }else if(act==='d-play'||act==='d-prev'||act==='d-next'||act==='d-submit'){
+      dicteeAction(act,t);
+    }else if(act==='reopen'&&parentOk){
+      t.done=false;t.doneAt=null;
+      if(t.type==='questions'){t.answers=null;t.score=null;delete answerDrafts[t.id]}
+      if(t.type==='dictee'){t.typed=null;t.errors=null;t.total=null;t.peeks=0;delete dDrafts[t.id]}
+      save();renderList();
+    }else if((act==='edit'||act==='edit-q')&&parentOk){
+      editingId=t.id;editDraft=toDraft(t.questions);editMeta={subject:t.subject,due:t.due,text:t.text,type:t.type,dict:t.dicteeText||''};
+      if(!editDraft.length)editDraft.push(newQ('text'));
+      pendingDelete=null;renderList();
+    }else if((act==='cancel-edit'||act==='cancel-q')&&parentOk){
+      editingId=null;editDraft=null;editMeta=null;renderList();
+    }else if(act==='save-edit'&&parentOk){
+      saveEdit(t);
+    }else if(act==='save-q'&&parentOk){
+      var c=cleanQuestions(editDraft||[]);
+      if(c.error){toast(c.error);return}
+      t.questions=c.questions;editingId=null;editDraft=null;
+      save();renderList();toast('Questions enregistrées');
+    }else if(act==='delete'&&parentOk){
+      pendingDelete=t.id;renderList();
+      setTimeout(function(){if(pendingDelete===t.id){pendingDelete=null;renderList()}},5000);
+    }else if(act==='delete-cancel'){
+      pendingDelete=null;renderList();
+    }else if(act==='delete-confirm'&&parentOk){
+      state.tasks=state.tasks.filter(function(x){return x.id!==t.id});
+      pendingDelete=null;delete answerDrafts[t.id];
+      if(editingId===t.id){editingId=null;editDraft=null}
+      save();renderList();toast('Devoir supprimé');
+    }
+  });
+
+  function onAnswerInput(e){
+    var el=e.target;
+    if(!el.hasAttribute)return;
+    if(el.hasAttribute('data-em')){if(editMeta)editMeta[el.getAttribute('data-em')]=el.value;return}
+    if(el.hasAttribute('data-dtype')){var dd=dDrafts[el.getAttribute('data-dtype')];if(dd)dd.typed[dd.i]=el.value;return}
+    if(el.getAttribute('data-act')==='d-punct'){var dp=dDrafts[el.getAttribute('data-id')];if(dp)dp.punct=el.checked;return}
+    if(!el.hasAttribute('data-ans'))return;
+    var t=find(el.getAttribute('data-task'));if(!t)return;
+    var q=t.questions[+el.getAttribute('data-ans')];if(!q)return;
+    var d=answerDrafts[t.id]||(answerDrafts[t.id]={});
+    d[q.id]=q.kind==='qcm'?+el.value:el.value;
+  }
+  $('#list').addEventListener('input',onAnswerInput);
+  $('#list').addEventListener('change',function(e){
+    onAnswerInput(e);
+    if(e.target.getAttribute&&e.target.getAttribute('data-em')==='type'){
+      if(editMeta&&editMeta.type==='questions'&&editDraft&&!editDraft.length)editDraft.push(newQ('text'));
+      renderList();return;
+    }
+    var inp=e.target.closest&&e.target.closest('input[data-act="photo"]');if(!inp)return;
+    var t=find(inp.getAttribute('data-id')),f=inp.files&&inp.files[0];
+    if(!t||!f||t.done)return;
+    shrink(f).then(function(data){t.photo=data;save();renderList();toast('Photo ajoutée')})
+      .catch(function(){toast('Impossible de lire cette photo. Essaie-en une autre.')});
+  });
+
+  $('#addbox').addEventListener('change',function(e){
+    if(e.target.id!=='fType')return;
+    var isQ=e.target.value==='questions';
+    if(role==='parent')$('#addDictWrap').hidden=e.target.value!=='dictee';
+    if(role==='parent'){
+      var ed=$('#addEd');ed.hidden=!isQ;
+      if(isQ)mountEditor(ed,addDraft,'add');
+    }else{
+      $('#addHint').hidden=!isQ;
+    }
+  });
+  $('#addbox').addEventListener('submit',function(e){
+    if(e.target.id!=='addForm')return;
+    e.preventDefault();
+    var text=$('#fText').value.trim(),due=$('#fDue').value,type=$('#fType').value,qs=[],dict='';
+    if(!text){toast('Écris ce qu’il faut faire.');return}
+    if(!due){toast('Choisis une date.');return}
+    if(type==='questions'&&role==='parent'){
+      var c=cleanQuestions(addDraft);
+      if(c.error){toast(c.error);return}
+      if(!c.questions.length){toast('Ajoute au moins une question.');return}
+      qs=c.questions;
+    }
+    if(type==='dictee'){
+      if(role!=='parent')return;
+      dict=$('#fDict').value.trim();
+      if(!splitSentences(dict).length){toast('Colle le texte de la dictée.');return}
+    }
+    state.tasks.push({id:uid(),subject:$('#fSubject').value,text:text,due:due,type:type,questions:qs,dicteeText:dict,typed:null,errors:null,total:null,peeks:0,done:false,photo:null,answers:null,score:null,doneAt:null,by:role});
+    save();
+    $('#fText').value='';
+    if(role==='parent')$('#fDict').value='';
+    addDraft.length=0;addDraft.push(newQ('text'));
+    if(type==='questions'&&role==='parent')mountEditor($('#addEd'),addDraft,'add');
+    renderList();toast('Devoir ajouté');
+  });
+
+  $('#gate').addEventListener('submit',function(e){
+    e.preventDefault();
+    var err=$('#gErr'),pin=$('#gPin').value.trim();
+    function show(m){err.textContent=m;err.hidden=false}
+    if(!/^\d{4}$/.test(pin)){show('Le code doit avoir 4 chiffres.');return}
+    if(!state.pin){
+      if(pin!==$('#gPin2').value.trim()){show('Les deux codes sont différents.');return}
+      state.salt=rand();
+      hashPin(pin).then(function(h){state.pin=h;save();unlocked=true;renderAll();toast('Code créé')});
+      return;
+    }
+    var now=Date.now();
+    if(now<lock.until){show('Trop d’essais. Attends '+Math.ceil((lock.until-now)/1000)+' s.');return}
+    hashPin(pin).then(function(h){
+      if(h===state.pin){lock.fails=0;unlocked=true;renderAll()}
+      else{
+        lock.fails++;
+        if(lock.fails>=5){lock.until=Date.now()+30000;lock.fails=0;show('Trop d’essais. Attends 30 s.')}
+        else show('Code incorrect.');
+        $('#gPin').value='';
+      }
+    });
+  });
+
+  $('#settings').addEventListener('submit',function(e){
+    if(e.target.id!=='pinForm')return;
+    e.preventDefault();
+    var err=$('#pErr'),o=$('#pOld').value.trim(),n=$('#pNew').value.trim();
+    function show(m){err.textContent=m;err.hidden=false}
+    if(!/^\d{4}$/.test(n)){show('Le nouveau code doit avoir 4 chiffres.');return}
+    hashPin(o).then(function(h){
+      if(h!==state.pin){show('Le code actuel est incorrect.');return}
+      state.salt=rand();
+      return hashPin(n).then(function(nh){state.pin=nh;save();$('#pOld').value='';$('#pNew').value='';err.hidden=true;toast('Code changé')});
+    });
+  });
+  $('#settings').addEventListener('click',function(e){
+    if(e.target.id==='btnLock')setRole('child');
+  });
+
+  function closeLb(){$('#lightbox').hidden=true;$('#lbImg').removeAttribute('src')}
+  $('#lbClose').addEventListener('click',closeLb);
+  $('#lightbox').addEventListener('click',function(e){if(e.target.id==='lightbox')closeLb()});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('#lightbox').hidden)closeLb()});
+
+  renderAll();
+})();
+</script>
+
+</html>
