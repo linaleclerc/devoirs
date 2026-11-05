@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
 <style>[hidden]{display:none!important}img{max-width:100%}:root{color-scheme:light}</style>
 <title>Devoir Fait</title>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -148,9 +149,9 @@ ins{color:var(--ok);font-weight:700;text-decoration:underline}
       <h1>Devoir <mark>Fait</mark></h1>
       <p class="lead" id="lead"></p>
     </div>
-    <div class="switch" role="group" aria-label="Choisir la vue">
-      <button type="button" id="btnChild" aria-pressed="true">Enfant</button>
-      <button type="button" id="btnParent" aria-pressed="false">Parent</button>
+    <div id="acct" class="row" hidden>
+      <span id="who" class="hint"></span>
+      <button type="button" class="btn" id="btnLogout">Se déconnecter</button>
     </div>
   </header>
 
@@ -159,7 +160,7 @@ ins{color:var(--ok);font-weight:700;text-decoration:underline}
   <section id="list" class="list" aria-live="polite"></section>
   <section id="settings" hidden></section>
 
-  <p class="foot">Pour l'instant, les devoirs restent sur cet appareil. Le code parent cache la vue parent, mais il ne remplace pas un vrai compte.</p>
+  <p class="foot">Les devoirs sont enregistrés en ligne et partagés entre le compte parent et le compte enfant.</p>
 </div>
 
 <div id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Photo du devoir">
@@ -168,12 +169,30 @@ ins{color:var(--ok);font-weight:700;text-decoration:underline}
 </div>
 <div id="toast" role="status"></div>
 
-<script>
+<script type="module">
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import {getFirestore,collection,doc,setDoc,deleteDoc,onSnapshot} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+/* ===== A REMPLIR (voir les étapes dans la réponse de Claude) ===== */
+const PARENT_EMAIL='COLLE_ICI_email_parent';
+const CHILD_EMAIL='COLLE_ICI_email_enfant';
+const CONFIG={
+  apiKey:'COLLE_ICI',
+  authDomain:'COLLE_ICI',
+  projectId:'COLLE_ICI',
+  appId:'COLLE_ICI'
+};
+/* ================================================================= */
+const READY=CONFIG.apiKey.indexOf('COLLE')!==0&&PARENT_EMAIL.indexOf('COLLE')!==0&&CHILD_EMAIL.indexOf('COLLE')!==0;
+let auth=null,db=null;
+if(READY){const app=initializeApp(CONFIG);auth=getAuth(app);db=getFirestore(app)}
+
 (function(){
   var SUBJECTS=['Maths','Français','Anglais','Histoire-Géo','SVT','Physique-Chimie','Techno','Musique','Arts plastiques','Autre'];
   var TYPES={feuille:'Sur feuille (photo)',questions:'Avec questions',dictee:'Dictée'};
   var KEY='devoirfait.v2',OLD_KEY='devoirfait.v1';
-  var role='child',unlocked=false,pendingDelete=null,lock={fails:0,until:0},toastTimer=null;
+  var role='out',user=null,unlocked=false,pendingDelete=null,lock={fails:0,until:0},toastTimer=null;
   var editingId=null,editDraft=null,addDraft=[],answerDrafts={},dDrafts={},openId=null,editMeta=null;
   var $=function(s){return document.querySelector(s)};
 
@@ -251,10 +270,37 @@ ins{color:var(--ok);font-weight:700;text-decoration:underline}
     }catch(e){}
     return seed();
   }
-  var state=load();
+  var state={tasks:[],pin:null,salt:null};
+  var lastSaved={},unsub=null;
+  function onErr(){toast('Enregistrement refusé ou impossible. Vérifie ta connexion.')}
   function save(){
-    try{localStorage.setItem(KEY,JSON.stringify(state));return true}
-    catch(e){toast('Mémoire pleine ou bloquée. Les changements ne seront pas gardés.');return false}
+    if(!db||!user)return false;
+    var ids={};
+    state.tasks.forEach(function(t){
+      ids[t.id]=1;
+      var j=JSON.stringify(t);
+      if(lastSaved[t.id]!==j){
+        lastSaved[t.id]=j;
+        setDoc(doc(db,'tasks',t.id),JSON.parse(j)).catch(onErr);
+      }
+    });
+    Object.keys(lastSaved).forEach(function(id){
+      if(!ids[id]){delete lastSaved[id];deleteDoc(doc(db,'tasks',id)).catch(onErr)}
+    });
+    return true;
+  }
+  function busy(){
+    var a=document.activeElement;
+    return !!editingId||!!(a&&a.closest&&a.closest('#list')&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  }
+  function subscribe(){
+    if(unsub)unsub();
+    unsub=onSnapshot(collection(db,'tasks'),function(snap){
+      var list=[];lastSaved={};
+      snap.forEach(function(d){var t=d.data();t.id=d.id;list.push(t);lastSaved[t.id]=JSON.stringify(t)});
+      state.tasks=list;
+      if(!busy())renderList();
+    },function(){toast('Lecture impossible. Vérifie tes règles Firestore et ta connexion.')});
   }
   function toast(m){
     var t=$('#toast');t.textContent=m;t.classList.add('show');
@@ -626,7 +672,7 @@ ins{color:var(--ok);font-weight:700;text-decoration:underline}
 
   function renderList(){
     var host=$('#list');
-    if(role==='parent'&&!unlocked){host.innerHTML='';return}
+    if(role==='out'||(role==='parent'&&!unlocked)){host.innerHTML='';return}
     var isParent=role==='parent';
     if(!isParent){
       var ab=$('#addbox'),ot=openId?find(openId):null;
@@ -671,52 +717,51 @@ ins{color:var(--ok);font-weight:700;text-decoration:underline}
 
   function renderGate(){
     var g=$('#gate');
-    var need=role==='parent'&&!unlocked;
-    g.hidden=!need;
-    if(!need){g.innerHTML='';return}
-    var creating=!state.pin;
-    g.innerHTML='<form id="gateForm" class="panel" autocomplete="off">'+
-      '<h2>'+(creating?'Crée un code parent':'Code parent')+'</h2>'+
-      '<p class="hint">'+(creating?'4 chiffres. L’enfant ne doit pas le connaître.':'Entre le code à 4 chiffres.')+'</p>'+
-      '<label class="f"><span>Code</span><input id="gPin" type="password" inputmode="numeric" maxlength="4" autocomplete="off"></label>'+
-      (creating?'<label class="f"><span>Répète le code</span><input id="gPin2" type="password" inputmode="numeric" maxlength="4" autocomplete="off"></label>':'')+
+    g.hidden=role!=='out';
+    if(role!=='out'){g.innerHTML='';return}
+    if(!READY){
+      g.innerHTML='<div class="panel"><h2>Base de données à brancher</h2>'+
+        '<p class="hint">Ouvre le fichier index.html et remplis les deux adresses e-mail et la configuration Firebase tout en haut du script.</p></div>';
+      return;
+    }
+    g.innerHTML='<form id="gateForm" class="panel">'+
+      '<h2>Connexion</h2>'+
+      '<label class="f"><span>E-mail</span><input id="gMail" type="email" autocomplete="username" required></label>'+
+      '<label class="f"><span>Mot de passe</span><input id="gPass" type="password" autocomplete="current-password" required></label>'+
       '<p class="err" id="gErr" role="alert" hidden></p>'+
-      '<button class="btn primary" type="submit">'+(creating?'Créer le code':'Entrer')+'</button></form>';
+      '<button class="btn primary" type="submit">Se connecter</button></form>';
   }
 
+  function localImportable(){
+    try{
+      if(localStorage.getItem('devoirfait.imported'))return [];
+      var r=localStorage.getItem(KEY);if(!r)return [];
+      var o=JSON.parse(r);
+      return (o&&Array.isArray(o.tasks)?o.tasks:[]).filter(function(t){return t&&!t.example});
+    }catch(e){return []}
+  }
   function renderSettings(){
     var s=$('#settings');
-    var show=role==='parent'&&unlocked;
-    s.hidden=!show;
-    if(!show){s.innerHTML='';return}
-    s.innerHTML='<details class="panel"><summary>Changer le code</summary>'+
-      '<form id="pinForm" autocomplete="off">'+
-      '<label class="f"><span>Code actuel</span><input id="pOld" type="password" inputmode="numeric" maxlength="4"></label>'+
-      '<label class="f"><span>Nouveau code</span><input id="pNew" type="password" inputmode="numeric" maxlength="4"></label>'+
-      '<p class="err" id="pErr" role="alert" hidden></p>'+
-      '<button class="btn primary" type="submit">Changer le code</button></form></details>'+
-      '<div class="row" style="margin-top:12px"><button type="button" class="btn" id="btnLock">Verrouiller la vue parent</button></div>';
+    var items=role==='parent'?localImportable():[];
+    s.hidden=!items.length;
+    if(!items.length){s.innerHTML='';return}
+    s.innerHTML='<div class="panel"><h2>Devoirs trouvés sur cet appareil</h2>'+
+      '<p class="hint">'+items.length+' devoir'+(items.length>1?'s':'')+' enregistré'+(items.length>1?'s':'')+' ici avant la connexion en ligne. Tu peux les envoyer en ligne.</p>'+
+      '<div class="row"><button type="button" class="btn primary" id="btnImport">Envoyer ces devoirs en ligne</button></div></div>';
   }
 
   function renderChrome(){
-    $('#btnChild').setAttribute('aria-pressed',role==='child');
-    $('#btnParent').setAttribute('aria-pressed',role==='parent');
     var lead=$('#lead');
-    if(role==='child')lead.textContent='Ajoute la photo, réponds aux questions ou fais ta dictée.';
-    else if(!unlocked)lead.textContent='Vue parent protégée par un code.';
+    $('#acct').hidden=role==='out';
+    $('#who').textContent=role==='parent'?'Compte parent':'Compte enfant';
+    if(role==='out')lead.textContent='Connecte-toi pour voir les devoirs.';
+    else if(role==='child')lead.textContent='Ajoute la photo, réponds aux questions ou fais ta dictée.';
     else lead.textContent='Tu vois ce qui est fait, avec les photos et les réponses.';
   }
 
   function renderAll(){renderChrome();renderGate();renderForm();renderList();renderSettings()}
 
-  function setRole(r){
-    if(r===role)return;
-    role=r;
-    if(r==='child'){unlocked=false;pendingDelete=null;editingId=null;editDraft=null;openId=null;editMeta=null}
-    renderAll();
-  }
-  $('#btnChild').addEventListener('click',function(){setRole('child')});
-  $('#btnParent').addEventListener('click',function(){setRole('parent')});
+  function resetUi(){pendingDelete=null;editingId=null;editDraft=null;openId=null;editMeta=null;answerDrafts={};dDrafts={}}
 
   function find(id){return state.tasks.find(function(t){return t.id===id})}
 
@@ -871,42 +916,25 @@ ins{color:var(--ok);font-weight:700;text-decoration:underline}
 
   $('#gate').addEventListener('submit',function(e){
     e.preventDefault();
-    var err=$('#gErr'),pin=$('#gPin').value.trim();
+    var err=$('#gErr');
     function show(m){err.textContent=m;err.hidden=false}
-    if(!/^\d{4}$/.test(pin)){show('Le code doit avoir 4 chiffres.');return}
-    if(!state.pin){
-      if(pin!==$('#gPin2').value.trim()){show('Les deux codes sont différents.');return}
-      state.salt=rand();
-      hashPin(pin).then(function(h){state.pin=h;save();unlocked=true;renderAll();toast('Code créé')});
-      return;
-    }
-    var now=Date.now();
-    if(now<lock.until){show('Trop d’essais. Attends '+Math.ceil((lock.until-now)/1000)+' s.');return}
-    hashPin(pin).then(function(h){
-      if(h===state.pin){lock.fails=0;unlocked=true;renderAll()}
-      else{
-        lock.fails++;
-        if(lock.fails>=5){lock.until=Date.now()+30000;lock.fails=0;show('Trop d’essais. Attends 30 s.')}
-        else show('Code incorrect.');
-        $('#gPin').value='';
-      }
+    err.hidden=true;
+    signInWithEmailAndPassword(auth,$('#gMail').value.trim(),$('#gPass').value).catch(function(){
+      show('E-mail ou mot de passe incorrect.');
+      var p=$('#gPass');if(p)p.value='';
     });
   });
-
-  $('#settings').addEventListener('submit',function(e){
-    if(e.target.id!=='pinForm')return;
-    e.preventDefault();
-    var err=$('#pErr'),o=$('#pOld').value.trim(),n=$('#pNew').value.trim();
-    function show(m){err.textContent=m;err.hidden=false}
-    if(!/^\d{4}$/.test(n)){show('Le nouveau code doit avoir 4 chiffres.');return}
-    hashPin(o).then(function(h){
-      if(h!==state.pin){show('Le code actuel est incorrect.');return}
-      state.salt=rand();
-      return hashPin(n).then(function(nh){state.pin=nh;save();$('#pOld').value='';$('#pNew').value='';err.hidden=true;toast('Code changé')});
-    });
-  });
+  $('#btnLogout').addEventListener('click',function(){if(auth)signOut(auth)});
   $('#settings').addEventListener('click',function(e){
-    if(e.target.id==='btnLock')setRole('child');
+    if(e.target.id!=='btnImport'||role!=='parent')return;
+    var items=localImportable(),have={};
+    state.tasks.forEach(function(t){have[t.id]=1});
+    items.forEach(function(t){if(!have[t.id]){t.by=t.by||'parent';state.tasks.push(t)}});
+    if(save()){
+      try{localStorage.setItem('devoirfait.imported','1')}catch(x){}
+      toast('Devoirs envoyés en ligne');
+    }
+    renderSettings();renderList();
   });
 
   function closeLb(){$('#lightbox').hidden=true;$('#lbImg').removeAttribute('src')}
@@ -915,6 +943,22 @@ ins{color:var(--ok);font-weight:700;text-decoration:underline}
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('#lightbox').hidden)closeLb()});
 
   renderAll();
+  if(READY){
+    onAuthStateChanged(auth,function(u){
+      resetUi();
+      if(!u){
+        if(unsub){unsub();unsub=null}
+        user=null;role='out';unlocked=false;state.tasks=[];lastSaved={};
+        renderAll();return;
+      }
+      var em=(u.email||'').toLowerCase();
+      if(em!==PARENT_EMAIL.toLowerCase()&&em!==CHILD_EMAIL.toLowerCase()){
+        signOut(auth);return;
+      }
+      user=u;role=em===PARENT_EMAIL.toLowerCase()?'parent':'child';unlocked=role==='parent';
+      subscribe();renderAll();
+    });
+  }
 })();
 </script>
 
