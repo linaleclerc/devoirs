@@ -160,7 +160,7 @@ ins{color:var(--ok);font-weight:700;text-decoration:underline}
   <section id="list" class="list" aria-live="polite"></section>
   <section id="settings" hidden></section>
 
-  <p class="foot">Les devoirs sont enregistrés en ligne et partagés entre le compte parent et le compte enfant.</p>
+  <p class="foot">Les devoirs sont enregistrés en ligne et partagés entre les appareils.</p>
 </div>
 
 <div id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Photo du devoir">
@@ -169,24 +169,11 @@ ins{color:var(--ok);font-weight:700;text-decoration:underline}
 </div>
 <div id="toast" role="status"></div>
 
-<script type="module">
-import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import {getFirestore,collection,doc,setDoc,deleteDoc,onSnapshot} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-
-/* ===== A REMPLIR (voir les étapes dans la réponse de Claude) ===== */
-const PARENT_EMAIL='COLLE_ICI_email_parent';
-const CHILD_EMAIL='COLLE_ICI_email_enfant';
-const CONFIG={
-  apiKey:'COLLE_ICI',
-  authDomain:'COLLE_ICI',
-  projectId:'COLLE_ICI',
-  appId:'COLLE_ICI'
-};
-/* ================================================================= */
-const READY=CONFIG.apiKey.indexOf('COLLE')!==0&&PARENT_EMAIL.indexOf('COLLE')!==0&&CHILD_EMAIL.indexOf('COLLE')!==0;
-let auth=null,db=null;
-if(READY){const app=initializeApp(CONFIG);auth=getAuth(app);db=getFirestore(app)}
+<script>
+/* ===== A REMPLIR : colle ici le lien de ton script Google (celui qui finit par /exec) ===== */
+const API_URL='COLLE_ICI';
+/* ========================================================================================= */
+const READY=API_URL.indexOf('COLLE')!==0;
 
 (function(){
   var SUBJECTS=['Maths','Français','Anglais','Histoire-Géo','SVT','Physique-Chimie','Techno','Musique','Arts plastiques','Autre'];
@@ -271,37 +258,99 @@ if(READY){const app=initializeApp(CONFIG);auth=getAuth(app);db=getFirestore(app)
     return seed();
   }
   var state={tasks:[],pin:null,salt:null};
-  var lastSaved={},unsub=null;
-  function onErr(){toast('Enregistrement refusé ou impossible. Vérifie ta connexion.')}
-  function save(){
-    if(!db||!user)return false;
-    var ids={};
-    state.tasks.forEach(function(t){
-      ids[t.id]=1;
-      var j=JSON.stringify(t);
-      if(lastSaved[t.id]!==j){
-        lastSaved[t.id]=j;
-        setDoc(doc(db,'tasks',t.id),JSON.parse(j)).catch(onErr);
-      }
-    });
-    Object.keys(lastSaved).forEach(function(id){
-      if(!ids[id]){delete lastSaved[id];deleteDoc(doc(db,'tasks',id)).catch(onErr)}
-    });
-    return true;
+  var lastSaved={},photoCache={},fetching={},pending=0,needSync=false,lastListJson='',pollTimer=null,pw=null;
+  function api(body){
+    body.pw=pw;
+    return fetch(API_URL,{method:'POST',body:JSON.stringify(body)}).then(function(r){return r.json()});
   }
+  function serialize(t){
+    var c=JSON.parse(JSON.stringify(t));
+    if(c.photoId&&c.photo===photoCache[c.photoId])delete c.photo;
+    return JSON.stringify(c);
+  }
+  function onErr(){needSync=true;toast('Enregistrement impossible. Vérifie ta connexion.')}
   function busy(){
     var a=document.activeElement;
     return !!editingId||!!(a&&a.closest&&a.closest('#list')&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
   }
-  function subscribe(){
-    if(unsub)unsub();
-    unsub=onSnapshot(collection(db,'tasks'),function(snap){
-      var list=[];lastSaved={};
-      snap.forEach(function(d){var t=d.data();t.id=d.id;list.push(t);lastSaved[t.id]=JSON.stringify(t)});
-      state.tasks=list;
-      if(!busy())renderList();
-    },function(){toast('Lecture impossible. Vérifie tes règles Firestore et ta connexion.')});
+  function save(){
+    if(role==='out')return false;
+    var ids={};
+    state.tasks.forEach(function(t){
+      ids[t.id]=1;
+      var j=serialize(t);
+      if(lastSaved[t.id]===j)return;
+      lastSaved[t.id]=j;
+      pending++;
+      api({action:'put',task:JSON.parse(j)}).then(function(res){
+        if(res.error){
+          needSync=true;
+          toast(res.error==='forbidden'?'Action refusée.':res.error==='photo'?'Photo trop grande ou illisible.':res.error==='toolong'?'Ce devoir est trop long.':res.error==='auth'?'Mot de passe refusé. Reconnecte-toi.':'Enregistrement impossible.');
+          return;
+        }
+        var s=res.task;
+        if(s.photoId&&typeof t.photo==='string'&&t.photo.indexOf('data:')===0)photoCache[s.photoId]=t.photo;
+        t.photoId=s.photoId||null;
+        lastSaved[t.id]=serialize(t);
+      }).catch(onErr).then(function(){pending--;if(!pending&&needSync){needSync=false;lastListJson='';refresh(true)}});
+    });
+    Object.keys(lastSaved).forEach(function(id){
+      if(ids[id])return;
+      delete lastSaved[id];
+      pending++;
+      api({action:'delete',id:id}).then(function(res){if(res.error){needSync=true;toast('Suppression refusée.')}})
+        .catch(onErr).then(function(){pending--;if(!pending&&needSync){needSync=false;lastListJson='';refresh(true)}});
+    });
+    return true;
   }
+  function applyList(res){
+    var js=JSON.stringify(res.tasks);
+    if(js===lastListJson)return false;
+    lastListJson=js;
+    lastSaved={};
+    res.tasks.forEach(function(t){
+      if(t.photoId&&photoCache[t.photoId])t.photo=photoCache[t.photoId];
+      lastSaved[t.id]=serialize(t);
+    });
+    state.tasks=res.tasks;
+    fetchPhotos();
+    return true;
+  }
+  function fetchPhotos(){
+    state.tasks.forEach(function(t){
+      var pid=t.photoId;
+      if(!pid||photoCache[pid]||fetching[pid])return;
+      fetching[pid]=1;
+      api({action:'photo',photoId:pid}).then(function(r){
+        if(r&&r.dataUrl){
+          photoCache[pid]=r.dataUrl;
+          state.tasks.forEach(function(x){if(x.photoId===pid&&x.photo===undefined){x.photo=r.dataUrl;lastSaved[x.id]=serialize(x)}});
+          if(!busy())renderList();
+        }
+      }).catch(function(){}).then(function(){delete fetching[pid]});
+    });
+  }
+  function refresh(force){
+    if(role==='out'||pending||(!force&&busy()))return Promise.resolve();
+    return api({action:'list'}).then(function(res){
+      if(res.error==='auth'){endSession();return}
+      if(res.error)return;
+      if(applyList(res)&&!busy())renderList();
+    }).catch(function(){});
+  }
+  function startSession(res){
+    role=res.role;unlocked=role==='parent';lastListJson='';
+    applyList(res);
+    renderAll();
+    clearInterval(pollTimer);
+    pollTimer=setInterval(function(){if(document.visibilityState==='visible')refresh()},15000);
+  }
+  function endSession(){
+    clearInterval(pollTimer);pw=null;role='out';unlocked=false;state.tasks=[];lastSaved={};lastListJson='';resetUi();
+    try{localStorage.removeItem('devoirfait.pw')}catch(e){}
+    renderAll();
+  }
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')refresh()});
   function toast(m){
     var t=$('#toast');t.textContent=m;t.classList.add('show');
     clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.classList.remove('show')},2800);
@@ -720,13 +769,13 @@ if(READY){const app=initializeApp(CONFIG);auth=getAuth(app);db=getFirestore(app)
     g.hidden=role!=='out';
     if(role!=='out'){g.innerHTML='';return}
     if(!READY){
-      g.innerHTML='<div class="panel"><h2>Base de données à brancher</h2>'+
-        '<p class="hint">Ouvre le fichier index.html et remplis les deux adresses e-mail et la configuration Firebase tout en haut du script.</p></div>';
+      g.innerHTML='<div class="panel"><h2>Serveur à brancher</h2>'+
+        '<p class="hint">Ouvre le fichier index.html et colle le lien de ton script Google (API_URL) tout en haut du script.</p></div>';
       return;
     }
     g.innerHTML='<form id="gateForm" class="panel">'+
       '<h2>Connexion</h2>'+
-      '<label class="f"><span>E-mail</span><input id="gMail" type="email" autocomplete="username" required></label>'+
+      '<p class="hint">Entre le mot de passe parent ou le mot de passe enfant.</p>'+
       '<label class="f"><span>Mot de passe</span><input id="gPass" type="password" autocomplete="current-password" required></label>'+
       '<p class="err" id="gErr" role="alert" hidden></p>'+
       '<button class="btn primary" type="submit">Se connecter</button></form>';
@@ -916,15 +965,24 @@ if(READY){const app=initializeApp(CONFIG);auth=getAuth(app);db=getFirestore(app)
 
   $('#gate').addEventListener('submit',function(e){
     e.preventDefault();
-    var err=$('#gErr');
+    var err=$('#gErr'),btn=e.target.querySelector('button[type=submit]'),p=$('#gPass').value;
     function show(m){err.textContent=m;err.hidden=false}
     err.hidden=true;
-    signInWithEmailAndPassword(auth,$('#gMail').value.trim(),$('#gPass').value).catch(function(){
-      show('E-mail ou mot de passe incorrect.');
-      var p=$('#gPass');if(p)p.value='';
-    });
+    if(!p){show('Entre le mot de passe.');return}
+    btn.disabled=true;btn.textContent='Connexion…';
+    pw=p;
+    api({action:'list'}).then(function(res){
+      if(res.error){
+        pw=null;
+        show(res.error==='locked'?'Trop d’essais. Attends 10 minutes.':res.error==='config'?'Le script n’est pas configuré : change les deux mots de passe dans Code.gs.':res.error==='auth'?'Mot de passe incorrect.':'Le serveur a répondu une erreur. Réessaie.');
+        return;
+      }
+      try{localStorage.setItem('devoirfait.pw',p)}catch(x){}
+      startSession(res);
+    }).catch(function(){pw=null;show('Impossible de joindre le serveur. Vérifie le lien et ta connexion.')})
+    .then(function(){var b=$('#gateForm button[type=submit]');if(b){b.disabled=false;b.textContent='Se connecter'}});
   });
-  $('#btnLogout').addEventListener('click',function(){if(auth)signOut(auth)});
+  $('#btnLogout').addEventListener('click',endSession);
   $('#settings').addEventListener('click',function(e){
     if(e.target.id!=='btnImport'||role!=='parent')return;
     var items=localImportable(),have={};
@@ -944,22 +1002,16 @@ if(READY){const app=initializeApp(CONFIG);auth=getAuth(app);db=getFirestore(app)
 
   renderAll();
   if(READY){
-    onAuthStateChanged(auth,function(u){
-      resetUi();
-      if(!u){
-        if(unsub){unsub();unsub=null}
-        user=null;role='out';unlocked=false;state.tasks=[];lastSaved={};
-        renderAll();return;
-      }
-      var em=(u.email||'').toLowerCase();
-      if(em!==PARENT_EMAIL.toLowerCase()&&em!==CHILD_EMAIL.toLowerCase()){
-        signOut(auth);return;
-      }
-      user=u;role=em===PARENT_EMAIL.toLowerCase()?'parent':'child';unlocked=role==='parent';
-      subscribe();renderAll();
-    });
+    var saved=null;
+    try{saved=localStorage.getItem('devoirfait.pw')}catch(e){}
+    if(saved){
+      pw=saved;
+      api({action:'list'}).then(function(res){
+        if(res.error){pw=null;if(res.error==='auth'){try{localStorage.removeItem('devoirfait.pw')}catch(e){}}return}
+        startSession(res);
+      }).catch(function(){pw=null;toast('Impossible de joindre le serveur.')});
+    }
   }
 })();
 </script>
-
 </html>
